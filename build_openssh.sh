@@ -513,13 +513,17 @@ done
 if [ -z "$_perl_with_findbin" ]; then
     echo -e "\033[1;33m[WARN]\033[0m perl 缺少 FindBin 模块，尝试自动安装..."
     if command -v dnf >/dev/null 2>&1; then
-        dnf install -y perl-FindBin 2>/dev/null || dnf reinstall -y perl
+        dnf install -y perl-FindBin 2>/dev/null || dnf install -y perl-core 2>/dev/null || dnf reinstall -y perl
     elif command -v yum >/dev/null 2>&1; then
-        yum install -y perl-FindBin 2>/dev/null || yum reinstall -y perl
+        yum install -y perl-FindBin 2>/dev/null || yum install -y perl-core 2>/dev/null || yum reinstall -y perl
     elif command -v zypper >/dev/null 2>&1; then
-        zypper -n install perl-FindBin
+        zypper -n install perl-FindBin 2>/dev/null || zypper -n install perl-base 2>/dev/null || zypper -n install perl
     elif command -v apt-get >/dev/null 2>&1; then
         apt-get update && apt-get install -y perl-modules
+    fi
+    # 包管理器装不上时用 cpan 兜底（FindBin 是核心模块，cpan 通常能拉到）
+    if command -v cpan >/dev/null 2>&1; then
+        cpan -T FindBin >/dev/null 2>&1 || true
     fi
     for _p in /usr/bin/perl perl; do
         if command -v "$_p" >/dev/null 2>&1 && "$_p" -MFindBin -e 1 >/dev/null 2>&1; then
@@ -587,12 +591,9 @@ else
 
     # 5. 编译
     trap cleanup_turbo INT TERM
-    # 非 yum 系（openSUSE 等）的包不会完整注册进 rpm 数据库，
-    # BuildRequires 无法解析，需跳过依赖检查（依赖已由镜像预装）
-    RPMBUILD_FLAGS="-bb"
-    if ! command -v yum >/dev/null 2>&1; then
-        RPMBUILD_FLAGS="-bb --nodeps"
-    fi
+    # 构建依赖由 Dockerfile 预装，UBI/openSUSE 等镜像的 rpm 数据库可能无法完整解析
+    # BuildRequires，统一用 --nodeps 跳过依赖检查。
+    RPMBUILD_FLAGS="-bb --nodeps"
     run_task "\033[1;33m[极速模式]\033[0m \033[1;34m编译并打包 RPM\033[0m (按下 \033[1;31mCtrl+C\033[0m 进一步加速)" "06_rpmbuild.log" \
         "rpmbuild ${RPMBUILD_FLAGS} --define \"_topdir ${RPMBUILD_DIR}\" ${RPMBUILD_DIR}/SPECS/openssh.spec"
 

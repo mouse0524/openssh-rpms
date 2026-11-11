@@ -44,8 +44,8 @@ RUN if command -v apt-get >/dev/null 2>&1; then \
         tar gzip patch xz-utils procps ca-certificates; \
       rm -rf /var/lib/apt/lists/*; \
     elif command -v zypper >/dev/null 2>&1; then \
-      zypper -n refresh; \
-      zypper -n install rpm-build gcc gcc-c++ make perl perl-FindBin zlib-devel pam-devel tar gzip patch which; \
+      zypper --non-interactive --gpg-auto-import-keys refresh --force 2>/dev/null || zypper -n refresh; \
+      zypper -n install rpm-build gcc gcc-c++ make perl perl-base zlib-devel pam-devel tar gzip patch which; \
       zypper -n clean --all; \
     elif command -v dnf >/dev/null 2>&1; then \
       dnf install -y rpm-build gcc gcc-c++ make \
