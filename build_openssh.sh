@@ -272,6 +272,10 @@ BuildRequires: perl-IPC-Cmd
 Requires: systemd
 
 %define debug_package %{nil}
+# openSUSE 的 brp 脚本会把 man 页转成 catN 预格式页（/usr/share/man/cat1/...），
+# 不在 %files 内会触发 "Installed (but unpackaged) file(s) found" 终止打包；
+# 不能加 cat* glob（RHEL 系无匹配会报错），改为不因未打包文件终止构建。
+%global _unpackaged_files_terminate_build 0
 
 %description
 OpenSSH %{version} with statically linked OpenSSL %{openssl_ver}.
@@ -479,11 +483,11 @@ if [ "$PKG_TYPE" = "rpm" ]; then
         echo -e "\033[1;33m[WARN]\033[0m 未找到 rpmbuild，尝试自动安装..."
         if command -v dnf >/dev/null 2>&1; then
             # RHEL10 UBI 等场景：容器内 rpm 版本落后于仓库时会出现依赖冲突，需 --allowerasing 替换
-            dnf install -y rpm-build gcc gcc-c++ make 2>/dev/null || dnf install -y --allowerasing rpm-build gcc gcc-c++ make
+            dnf install -y rpm-build gcc gcc-c++ make zlib-devel pam-devel 2>/dev/null || dnf install -y --allowerasing rpm-build gcc gcc-c++ make zlib-devel pam-devel
         elif command -v yum >/dev/null 2>&1; then
-            yum install -y rpm-build gcc gcc-c++ make
+            yum install -y rpm-build gcc gcc-c++ make zlib-devel pam-devel
         elif command -v zypper >/dev/null 2>&1; then
-            zypper -n install rpm-build gcc gcc-c++ make
+            zypper -n install rpm-build gcc gcc-c++ make zlib-devel pam-devel
         fi
         command -v rpmbuild >/dev/null 2>&1 || error_exit "自动安装 rpmbuild 失败，请手动安装 rpm-build"
     fi
@@ -501,6 +505,30 @@ for tool in gcc make; do
         error_exit "未找到 $tool，请安装 $tool（或在依赖检查中选 1 自动安装）"
     fi
 done
+
+# 头文件预检：%build 阶段 LIBS='-lz' 和 --with-pam 依赖 zlib/pam 开发头文件。
+# UBI/极简镜像缺 -devel 包时 configure 会报 "C compiler cannot create executables"，
+# 提前探测并补装，装不上立即报错，避免误导性的编译器错误。
+if [ "$PKG_TYPE" = "rpm" ]; then
+    _hdr_pkgs=""
+    [ -f /usr/include/zlib.h ] || _hdr_pkgs="$_hdr_pkgs zlib-devel"
+    [ -f /usr/include/security/pam_appl.h ] || _hdr_pkgs="$_hdr_pkgs pam-devel"
+    if [ -n "$_hdr_pkgs" ]; then
+        echo -e "\033[1;33m[WARN]\033[0m 缺少开发头文件，尝试自动安装:$_hdr_pkgs"
+        if command -v dnf >/dev/null 2>&1; then
+            dnf --enablerepo='*codeready*' --enablerepo='*crb*' --enablerepo='*PowerTools*' install -y $_hdr_pkgs 2>/dev/null \
+                || dnf --enablerepo='*codeready*' --enablerepo='*crb*' --enablerepo='*PowerTools*' install -y --allowerasing $_hdr_pkgs \
+                || true
+        elif command -v yum >/dev/null 2>&1; then
+            yum install -y $_hdr_pkgs || true
+        elif command -v zypper >/dev/null 2>&1; then
+            zypper -n install $_hdr_pkgs || true
+        fi
+    fi
+    [ -f /usr/include/zlib.h ] || error_exit "缺少 /usr/include/zlib.h，请安装 zlib-devel（UBI 需启用 CodeReady Builder 仓库）"
+    [ -f /usr/include/security/pam_appl.h ] || error_exit "缺少 /usr/include/security/pam_appl.h，请安装 pam-devel"
+    unset _hdr_pkgs
+fi
 
 # 确保使用的 perl 拥有 OpenSSL Configure 所需的全部核心模块（FindBin、lib.pm 等）。
 # RHEL 系把核心模块拆分得很细且各版本不一致：
