@@ -292,6 +292,8 @@ Requires: openssh = %{version}-%{release}
 OpenSSH Clients with static OpenSSL.
 
 %prep
+# 强制使用系统 perl（/usr/bin/perl），避免镜像中 /usr/local 的残缺 perl 缺核心模块
+export PATH=/usr/bin:/bin:$PATH
 %setup -q
 ${UOS_PATCH_PREP}
 mkdir -p openssl_static
@@ -303,6 +305,7 @@ make install_sw DESTDIR=\$(pwd)/../openssl_install
 popd
 
 %build
+export PATH=/usr/bin:/bin:$PATH
 %define openssl_install_path %{_builddir}/%{name}-%{version}/openssl_install/opt/openssl-static
 export LIBS='-lpthread -ldl -lz'
 ./configure --prefix=/usr --sysconfdir=/etc/ssh --libexecdir=/usr/libexec/openssh --with-ssl-dir=%{openssl_install_path} --without-openssl-header-check --with-zlib --with-pam --with-md5-passwords --without-zlib-version-check
@@ -561,7 +564,7 @@ if [ "$PKG_TYPE" = "deb" ]; then
     # 5. 编译 OpenSSH 并组装 DEB
     trap cleanup_turbo INT TERM
     run_task "\033[1;33m[极速模式]\033[0m \033[1;34m编译 OpenSSH 并打包 DEB\033[0m (按下 \033[1;31mCtrl+C\033[0m 进一步加速)" "06_deb_build.log" \
-        "cd ${DEB_SRC}/openssh-${OPENSSH_VERSION} && export LIBS='-lpthread -ldl -lz' && \
+        "cd ${DEB_SRC}/openssh-${OPENSSH_VERSION} && export PATH=/usr/bin:/bin:\$PATH && export LIBS='-lpthread -ldl -lz' && \
          ./configure --prefix=/usr --sysconfdir=/etc/ssh --libexecdir=/usr/lib/openssh --with-ssl-dir=${DEB_ROOT}/openssl_install/opt/openssl-static --without-openssl-header-check --with-zlib --with-pam --with-md5-passwords --without-zlib-version-check && \
          perl -pi -e 's|-lcrypto|${DEB_ROOT}/openssl_install/opt/openssl-static/lib/libcrypto.a -lpthread -ldl -lz|g' Makefile && \
          perl -pi -e 's|-lssl|${DEB_ROOT}/openssl_install/opt/openssl-static/lib/libssl.a|g' Makefile && \
