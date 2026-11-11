@@ -516,9 +516,13 @@ if [ "$PKG_TYPE" = "rpm" ]; then
     if [ -n "$_hdr_pkgs" ]; then
         echo -e "\033[1;33m[WARN]\033[0m 缺少开发头文件，尝试自动安装:$_hdr_pkgs"
         if command -v dnf >/dev/null 2>&1; then
-            dnf --enablerepo='*codeready*' --enablerepo='*crb*' --enablerepo='*PowerTools*' install -y $_hdr_pkgs 2>/dev/null \
-                || dnf --enablerepo='*codeready*' --enablerepo='*crb*' --enablerepo='*PowerTools*' install -y --allowerasing $_hdr_pkgs \
-                || true
+            # 先探测存在的 CRB 类仓库并逐个启用，再普通安装（不能盲传 --enablerepo glob，
+            # dnf 对不匹配的 glob 会直接报错终止事务）
+            for _r in $(dnf repolist --all 2>/dev/null | grep -iE 'codeready|crb|powertools' | awk '{print $1}'); do
+                dnf config-manager --set-enabled "$_r" >/dev/null 2>&1 || true
+            done
+            sed -i 's/^enabled=0/enabled=1/' /etc/yum.repos.d/ubi.repo 2>/dev/null || true
+            dnf install -y $_hdr_pkgs 2>/dev/null || dnf install -y --allowerasing $_hdr_pkgs || true
         elif command -v yum >/dev/null 2>&1; then
             yum install -y $_hdr_pkgs || true
         elif command -v zypper >/dev/null 2>&1; then
