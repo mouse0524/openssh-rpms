@@ -16,6 +16,11 @@ OUTPUT_DIR="/opt"
 LOG_DIR="/tmp/openssh_build_logs"
 
 mkdir -p $LOG_DIR
+
+# 兼容无 tput 的环境（极简容器/未装 ncurses）：将 tput 降级为空操作
+if ! command -v tput >/dev/null 2>&1; then
+    tput() { :; }
+fi
 tput civis # 隐藏光标
 
 # === 1. 标准退出 ===
@@ -260,7 +265,7 @@ License: BSD
 Group: Applications/Internet
 BuildRoot: %{_tmppath}/%{name}-%{version}-buildroot
 BuildRequires: gcc, make, perl, zlib-devel, pam-devel
-BuildRequires: perl-IPC-Cmd
+BuildRequires: perl-IPC-Cmd, perl-FindBin
 Requires: systemd
 
 %define debug_package %{nil}
@@ -451,16 +456,35 @@ tput civis
 if [ "$install_choice" == "1" ]; then
     if command -v yum >/dev/null 2>&1; then
         run_task "安装依赖组件" "02_yum_install.log" \
-            "yum install -y rpm-build gcc gcc-c++ make perl perl-IPC-Cmd perl-Data-Dumper perl-Pod-Html zlib-devel pam-devel krb5-devel libXt-devel gtk2-devel perl-devel perl-Time-Piece systemd-devel"
+            "yum install -y rpm-build gcc gcc-c++ make perl perl-FindBin perl-IPC-Cmd perl-Data-Dumper perl-Pod-Html zlib-devel pam-devel krb5-devel libXt-devel gtk2-devel perl-devel perl-Time-Piece systemd-devel"
     elif command -v zypper >/dev/null 2>&1; then
         run_task "安装依赖组件 (zypper)" "02_yum_install.log" \
-            "zypper -n install rpm-build gcc gcc-c++ make perl zlib-devel pam-devel patch which"
+            "zypper -n install rpm-build gcc gcc-c++ make perl perl-FindBin zlib-devel pam-devel patch which"
     else
         run_task "安装依赖组件 (apt)" "02_yum_install.log" \
             "export DEBIAN_FRONTEND=noninteractive && apt-get update && apt-get install -y rpm gcc g++ make perl zlib1g-dev libpam0g-dev patch"
     fi
 else
     echo -e "   -> \033[1;33m跳过依赖安装\033[0m"
+fi
+
+# 依赖预检：跳过安装时给出明确提示，避免跑到一半才发现缺工具
+if [ "$PKG_TYPE" = "rpm" ]; then
+    command -v rpmbuild >/dev/null 2>&1 || error_exit "未找到 rpmbuild，请安装 rpm-build（或在依赖检查中选 1 自动安装）"
+else
+    command -v dpkg-deb >/dev/null 2>&1 || error_exit "未找到 dpkg-deb，请安装 dpkg-dev（或在依赖检查中选 1 自动安装）"
+fi
+command -v gcc >/dev/null 2>&1 || error_exit "未找到 gcc，请安装 gcc（或在依赖检查中选 1 自动安装）"
+command -v make >/dev/null 2>&1 || error_exit "未找到 make，请安装 make（或在依赖检查中选 1 自动安装）"
+
+# 某些环境（自编译 perl 装在 /usr/local）的 perl 缺失 FindBin 等核心模块，
+# 导致 OpenSSL 的 Configure 失败。优先切换到拥有 FindBin 的 perl。
+if ! perl -MFindBin -e 1 >/dev/null 2>&1; then
+    if [ -x /usr/bin/perl ] && /usr/bin/perl -MFindBin -e 1 >/dev/null 2>&1; then
+        export PATH="/usr/bin:$PATH"
+    else
+        error_exit "当前 perl 缺少 FindBin 模块。请为使用中的 perl 安装 FindBin（如 yum install perl-FindBin，或 cpan FindBin）"
+    fi
 fi
 
 if [ "$PKG_TYPE" = "deb" ]; then
@@ -520,7 +544,7 @@ else
         RPMBUILD_FLAGS="-bb --nodeps"
     fi
     run_task "\033[1;33m[极速模式]\033[0m \033[1;34m编译并打包 RPM\033[0m (按下 \033[1;31mCtrl+C\033[0m 进一步加速)" "06_rpmbuild.log" \
-        "rpmbuild ${RPMBUILD_FLAGS} ${RPMBUILD_DIR}/SPECS/openssh.spec"
+        "rpmbuild ${RPMBUILD_FLAGS} --define \"_topdir ${RPMBUILD_DIR}\" ${RPMBUILD_DIR}/SPECS/openssh.spec"
 
     trap cleanup_standard INT TERM
 fi

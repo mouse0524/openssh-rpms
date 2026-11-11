@@ -39,6 +39,8 @@ env:
 | openSUSE Leap 15.6 | 是 | 是 |
 | deepin 25（deb） | 是 | 是 |
 
+> deepin 25 未在 Docker Hub 发布官方镜像，构建基底使用与其二进制兼容的 `debian:13`，产物仍标记为 `deepin25`。
+
 Ubuntu/Debian/deepin 目标输出 `.deb` 包（安装包内含的 install.sh 会自动改用 dpkg 安装），
 其余目标输出 RPM 包。
 

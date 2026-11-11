@@ -439,14 +439,14 @@ jobs:
             arch: x86_64
             platform: linux/amd64
             runner: ubuntu-latest
-            image: "deepin/deepin:25"
+            image: "debian:13"
             os_tag: deepin25
             uos20: "0"
           - target: deepin-25
             arch: aarch64
             platform: linux/arm64
             runner: ubuntu-24.04-arm
-            image: "deepin/deepin:25"
+            image: "debian:13"
             os_tag: deepin25
             uos20: "0"
           - target: almalinux8

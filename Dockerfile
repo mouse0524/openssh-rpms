@@ -45,11 +45,11 @@ RUN if command -v apt-get >/dev/null 2>&1; then \
       rm -rf /var/lib/apt/lists/*; \
     elif command -v zypper >/dev/null 2>&1; then \
       zypper -n refresh; \
-      zypper -n install rpm-build gcc gcc-c++ make perl zlib-devel pam-devel tar gzip patch which; \
+      zypper -n install rpm-build gcc gcc-c++ make perl perl-FindBin zlib-devel pam-devel tar gzip patch which; \
       zypper -n clean --all; \
     else \
       yum install -y rpm-build gcc gcc-c++ make \
-        perl perl-IPC-Cmd perl-Data-Dumper perl-Pod-Html perl-devel perl-Time-Piece \
+        perl perl-FindBin perl-IPC-Cmd perl-Data-Dumper perl-Pod-Html perl-devel perl-Time-Piece \
         zlib-devel pam-devel tar gzip which patch ncurses; \
       yum clean all; \
     fi
