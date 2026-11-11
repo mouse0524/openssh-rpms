@@ -470,12 +470,31 @@ fi
 
 # 依赖预检：跳过安装时给出明确提示，避免跑到一半才发现缺工具
 if [ "$PKG_TYPE" = "rpm" ]; then
-    command -v rpmbuild >/dev/null 2>&1 || error_exit "未找到 rpmbuild，请安装 rpm-build（或在依赖检查中选 1 自动安装）"
+    if ! command -v rpmbuild >/dev/null 2>&1; then
+        echo -e "\033[1;33m[WARN]\033[0m 未找到 rpmbuild，尝试自动安装..."
+        if command -v dnf >/dev/null 2>&1; then
+            dnf install -y rpm-build gcc gcc-c++ make
+        elif command -v yum >/dev/null 2>&1; then
+            yum install -y rpm-build gcc gcc-c++ make
+        elif command -v zypper >/dev/null 2>&1; then
+            zypper -n install rpm-build gcc gcc-c++ make
+        fi
+        command -v rpmbuild >/dev/null 2>&1 || error_exit "自动安装 rpmbuild 失败，请手动安装 rpm-build"
+    fi
 else
-    command -v dpkg-deb >/dev/null 2>&1 || error_exit "未找到 dpkg-deb，请安装 dpkg-dev（或在依赖检查中选 1 自动安装）"
+    if ! command -v dpkg-deb >/dev/null 2>&1; then
+        echo -e "\033[1;33m[WARN]\033[0m 未找到 dpkg-deb，尝试自动安装..."
+        if command -v apt-get >/dev/null 2>&1; then
+            apt-get update && apt-get install -y dpkg-dev gcc make
+        fi
+        command -v dpkg-deb >/dev/null 2>&1 || error_exit "自动安装 dpkg-dev 失败，请手动安装 dpkg-dev"
+    fi
 fi
-command -v gcc >/dev/null 2>&1 || error_exit "未找到 gcc，请安装 gcc（或在依赖检查中选 1 自动安装）"
-command -v make >/dev/null 2>&1 || error_exit "未找到 make，请安装 make（或在依赖检查中选 1 自动安装）"
+for tool in gcc make; do
+    if ! command -v $tool >/dev/null 2>&1; then
+        error_exit "未找到 $tool，请安装 $tool（或在依赖检查中选 1 自动安装）"
+    fi
+done
 
 # 某些环境（自编译 perl 装在 /usr/local）的 perl 缺失 FindBin 等核心模块，
 # 导致 OpenSSL 的 Configure 失败。优先切换到拥有 FindBin 的 perl。
