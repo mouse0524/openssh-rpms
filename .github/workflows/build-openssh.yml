@@ -323,6 +323,244 @@ jobs:
             image: "quay.io/centos/centos:stream8"
             os_tag: uos20
             uos20: "1"
+          - target: ubuntu-26.04
+            arch: x86_64
+            platform: linux/amd64
+            runner: ubuntu-latest
+            image: "ubuntu:26.04"
+            os_tag: ubuntu2604
+            uos20: "0"
+          - target: ubuntu-26.04
+            arch: aarch64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            image: "ubuntu:26.04"
+            os_tag: ubuntu2604
+            uos20: "0"
+          - target: ubuntu-22.04
+            arch: x86_64
+            platform: linux/amd64
+            runner: ubuntu-latest
+            image: "ubuntu:22.04"
+            os_tag: ubuntu22
+            uos20: "0"
+          - target: ubuntu-22.04
+            arch: aarch64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            image: "ubuntu:22.04"
+            os_tag: ubuntu22
+            uos20: "0"
+          - target: ubuntu-24.04
+            arch: x86_64
+            platform: linux/amd64
+            runner: ubuntu-latest
+            image: "ubuntu:24.04"
+            os_tag: ubuntu24
+            uos20: "0"
+          - target: ubuntu-24.04
+            arch: aarch64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            image: "ubuntu:24.04"
+            os_tag: ubuntu24
+            uos20: "0"
+          - target: anolis8
+            arch: x86_64
+            platform: linux/amd64
+            runner: ubuntu-latest
+            image: "openanolis/anolisos:8"
+            os_tag: an8
+            uos20: "0"
+          - target: anolis8
+            arch: aarch64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            image: "openanolis/anolisos:8"
+            os_tag: an8
+            uos20: "0"
+          - target: anolis23
+            arch: x86_64
+            platform: linux/amd64
+            runner: ubuntu-latest
+            image: "openanolis/anolisos:23"
+            os_tag: an23
+            uos20: "0"
+          - target: anolis23
+            arch: aarch64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            image: "openanolis/anolisos:23"
+            os_tag: an23
+            uos20: "0"
+          - target: rhel8
+            arch: x86_64
+            platform: linux/amd64
+            runner: ubuntu-latest
+            image: "registry.access.redhat.com/ubi8/ubi"
+            os_tag: el8
+            uos20: "0"
+          - target: rhel8
+            arch: aarch64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            image: "registry.access.redhat.com/ubi8/ubi"
+            os_tag: el8
+            uos20: "0"
+          - target: rhel9
+            arch: x86_64
+            platform: linux/amd64
+            runner: ubuntu-latest
+            image: "registry.access.redhat.com/ubi9/ubi"
+            os_tag: el9
+            uos20: "0"
+          - target: rhel9
+            arch: aarch64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            image: "registry.access.redhat.com/ubi9/ubi"
+            os_tag: el9
+            uos20: "0"
+          - target: rhel10
+            arch: x86_64
+            platform: linux/amd64
+            runner: ubuntu-latest
+            image: "registry.access.redhat.com/ubi10/ubi"
+            os_tag: el10
+            uos20: "0"
+          - target: rhel10
+            arch: aarch64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            image: "registry.access.redhat.com/ubi10/ubi"
+            os_tag: el10
+            uos20: "0"
+          - target: deepin-25
+            arch: x86_64
+            platform: linux/amd64
+            runner: ubuntu-latest
+            image: "deepin/deepin:25"
+            os_tag: deepin25
+            uos20: "0"
+          - target: deepin-25
+            arch: aarch64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            image: "deepin/deepin:25"
+            os_tag: deepin25
+            uos20: "0"
+          - target: almalinux8
+            arch: x86_64
+            platform: linux/amd64
+            runner: ubuntu-latest
+            image: "almalinux:8"
+            os_tag: el8
+            uos20: "0"
+          - target: almalinux8
+            arch: aarch64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            image: "almalinux:8"
+            os_tag: el8
+            uos20: "0"
+          - target: almalinux9
+            arch: x86_64
+            platform: linux/amd64
+            runner: ubuntu-latest
+            image: "almalinux:9"
+            os_tag: el9
+            uos20: "0"
+          - target: almalinux9
+            arch: aarch64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            image: "almalinux:9"
+            os_tag: el9
+            uos20: "0"
+          - target: almalinux10
+            arch: x86_64
+            platform: linux/amd64
+            runner: ubuntu-latest
+            image: "almalinux:10"
+            os_tag: el10
+            uos20: "0"
+          - target: almalinux10
+            arch: aarch64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            image: "almalinux:10"
+            os_tag: el10
+            uos20: "0"
+          - target: fedora-43
+            arch: x86_64
+            platform: linux/amd64
+            runner: ubuntu-latest
+            image: "fedora:43"
+            os_tag: fc43
+            uos20: "0"
+          - target: fedora-43
+            arch: aarch64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            image: "fedora:43"
+            os_tag: fc43
+            uos20: "0"
+          - target: fedora-44
+            arch: x86_64
+            platform: linux/amd64
+            runner: ubuntu-latest
+            image: "fedora:44"
+            os_tag: fc44
+            uos20: "0"
+          - target: fedora-44
+            arch: aarch64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            image: "fedora:44"
+            os_tag: fc44
+            uos20: "0"
+          - target: debian-12
+            arch: x86_64
+            platform: linux/amd64
+            runner: ubuntu-latest
+            image: "debian:12"
+            os_tag: debian12
+            uos20: "0"
+          - target: debian-12
+            arch: aarch64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            image: "debian:12"
+            os_tag: debian12
+            uos20: "0"
+          - target: debian-13
+            arch: x86_64
+            platform: linux/amd64
+            runner: ubuntu-latest
+            image: "debian:13"
+            os_tag: debian13
+            uos20: "0"
+          - target: debian-13
+            arch: aarch64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            image: "debian:13"
+            os_tag: debian13
+            uos20: "0"
+          - target: opensuse-leap-15.6
+            arch: x86_64
+            platform: linux/amd64
+            runner: ubuntu-latest
+            image: "opensuse/leap:15.6"
+            os_tag: leap15
+            uos20: "0"
+          - target: opensuse-leap-15.6
+            arch: aarch64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            image: "opensuse/leap:15.6"
+            os_tag: leap15
+            uos20: "0"
 
     env:
       SSH_VERSION: ${{ needs.resolve.outputs.ssh_version }}
@@ -372,11 +610,15 @@ jobs:
         run: |
           set -e
           SOURCE="$(find output -maxdepth 1 -type f -name '*.tar.gz' -print -quit)"
-          [ -n "$SOURCE" ] || { echo "未找到 RPM 压缩包"; exit 1; }
+          [ -n "$SOURCE" ] || { echo "未找到安装包压缩文件"; exit 1; }
           tar -tzf "$SOURCE" | grep -q '/install.sh$' \
-            || { echo "RPM 压缩包中缺少 install.sh"; exit 1; }
+            || { echo "安装包压缩文件中缺少 install.sh"; exit 1; }
+          case "$TARGET_ID" in
+            debian-*|ubuntu-*|deepin-*) PKG_KIND="debs" ;;
+            *) PKG_KIND="rpms" ;;
+          esac
           mkdir -p dist
-          cp "$SOURCE" "dist/openssh-${SSH_VERSION}-rpms-${TARGET_ID}-${TARGET_ARCH}.tar.gz"
+          cp "$SOURCE" "dist/openssh-${SSH_VERSION}-${PKG_KIND}-${TARGET_ID}-${TARGET_ARCH}.tar.gz"
           ls -lh dist/
 
       - name: Upload artifact
@@ -407,7 +649,7 @@ jobs:
       - name: Prepare Release
         run: |
           set -e
-          test "$(find release-assets -maxdepth 1 -name '*.tar.gz' | wc -l)" -eq 26
+          test "$(find release-assets -maxdepth 1 -name '*.tar.gz' | wc -l)" -eq 60
           ls -lh release-assets/
 
       - name: Create Release

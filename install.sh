@@ -83,18 +83,34 @@ if [ "${1:-}" = "--self-test" ]; then
 fi
 
 [ "$(id -u)" -eq 0 ] || die "请使用 root 运行此脚本"
-command -v rpm >/dev/null 2>&1 || die "未找到 rpm 命令"
 
 SCRIPT_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd)
 SSHD_CONFIG=${SSHD_CONFIG:-/etc/ssh/sshd_config}
 BACKUP_TIME=$(date +%Y%m%d%H%M%S)
 
-set -- "$SCRIPT_DIR"/*.rpm
-[ -f "$1" ] || die "当前安装包中未找到 RPM 文件"
-
 echo "即将升级 OpenSSH；请保持当前 SSH 会话，并准备备用登录通道。"
 backup_file "$SSHD_CONFIG"
-rpm -Uvh --replacefiles "$@"
+
+if [ -n "$(ls "$SCRIPT_DIR"/*.deb 2>/dev/null)" ]; then
+    # DEB 目标（Debian/Ubuntu/deepin 等）
+    command -v dpkg >/dev/null 2>&1 || die "未找到 dpkg 命令"
+    # --force-confold: 保留系统现有 sshd_config 等配置（等价于 RPM 的 %config(noreplace)）
+    DEBIAN_FRONTEND=noninteractive dpkg -i --force-confdef --force-confold "$SCRIPT_DIR"/*.deb
+    # dpkg -i 不做依赖解析；若有其他包依赖 openssh-client/server 会留下依赖破损状态
+    broken_pkgs=$(dpkg -C 2>/dev/null || true)
+    if [ -n "$broken_pkgs" ]; then
+        echo "WARNING: 以下软件包存在依赖破损（通常因替换 openssh-client/server）："
+        echo "$broken_pkgs"
+        echo "可执行 'apt-get -f install' 收尾；不影响本次 OpenSSH 安装。"
+    fi
+elif [ -n "$(ls "$SCRIPT_DIR"/*.rpm 2>/dev/null)" ]; then
+    # RPM 目标
+    command -v rpm >/dev/null 2>&1 || die "未找到 rpm 命令（Debian/Ubuntu/deepin 等系统请先执行: apt-get install -y rpm）"
+    # --nodeps: Debian/Ubuntu 等系统的 rpm 数据库为空，包依赖（如 systemd）无法解析
+    rpm -Uvh --replacefiles --nodeps "$SCRIPT_DIR"/*.rpm
+else
+    die "当前安装包中未找到 RPM/DEB 文件"
+fi
 
 [ -f "$SSHD_CONFIG" ] || die "未找到 $SSHD_CONFIG"
 
@@ -126,9 +142,12 @@ fi
 
 if command -v systemctl >/dev/null 2>&1; then
     systemctl daemon-reload
-    systemctl restart sshd
+    if ! systemctl restart sshd.service 2>/dev/null; then
+        # Debian/Ubuntu 等系统服务名为 ssh.service
+        systemctl restart ssh.service
+    fi
 elif command -v service >/dev/null 2>&1; then
-    service sshd restart
+    service sshd restart || service ssh restart
 elif [ -x /etc/init.d/sshd ]; then
     /etc/init.d/sshd restart
 else

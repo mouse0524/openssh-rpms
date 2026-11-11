@@ -17,7 +17,7 @@ env:
   SSL_VERSION: "3.5.9"
 ```
 
-推送和手动运行使用上述固定版本；定时运行使用自动检测版本。工作流会并行构建26个目标，
+推送和手动运行使用上述固定版本；定时运行使用自动检测版本。工作流会并行构建60个目标，
 全部成功后发布到 `openssh-<OpenSSH版本>-openssl-<OpenSSL版本>` Release，
 同时保留每个目标的 Actions Artifact。
 
@@ -30,6 +30,17 @@ env:
 | openEuler 24.03 LTS SP2/SP3/SP4 | 是 | 是 |
 | 银河麒麟 V10 SP1/SP2/SP3 | 是 | 是 |
 | UOS 20 兼容包 | 是 | 是 |
+| Ubuntu 22.04/24.04/26.04 LTS（deb） | 是 | 是 |
+| Anolis OS 8/23 | 是 | 是 |
+| RHEL 8/9/10（UBI 镜像构建） | 是 | 是 |
+| AlmaLinux 8/9/10 | 是 | 是 |
+| Fedora 43/44 | 是 | 是 |
+| Debian 12/13（deb） | 是 | 是 |
+| openSUSE Leap 15.6 | 是 | 是 |
+| deepin 25（deb） | 是 | 是 |
+
+Ubuntu/Debian/deepin 目标输出 `.deb` 包（安装包内含的 install.sh 会自动改用 dpkg 安装），
+其余目标输出 RPM 包。
 
 麒麟目标使用社区镜像 `hxsoong/kylin`，并锁定多架构 digest；该镜像不是麒麟官方发布。
 UOS 20 目标参考 [boypt/openssh-rpms](https://github.com/boypt/openssh-rpms)，在 EL8

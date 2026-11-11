@@ -78,6 +78,10 @@ function get_os_tag {
                 echo "an${major}"; return ;;
             openEuler|openeuler)
                 echo "oe${major}"; return ;;
+            deepin)
+                echo "deepin${major}"; return ;;
+            debian)
+                echo "debian${major}"; return ;;
             kylin|kylin_linux_advanced_server)
                 echo "ky10"; return ;;
             uos)
@@ -314,10 +318,10 @@ rm -rf %{buildroot}
 %post server
 systemctl daemon-reload
 if ls /etc/ssh/ssh_host_*_key >/dev/null 2>&1; then chmod 600 /etc/ssh/ssh_host_*_key; fi
-systemctl enable sshd
+systemctl enable sshd >/dev/null 2>&1 || systemctl enable ssh >/dev/null 2>&1 || true
 
 %preun server
-if [ \$1 -eq 0 ]; then systemctl disable --now sshd; fi
+if [ \$1 -eq 0 ]; then systemctl disable --now sshd >/dev/null 2>&1 || systemctl disable --now ssh >/dev/null 2>&1 || true; fi
 
 %files
 %defattr(-,root,root)
@@ -351,9 +355,63 @@ if [ \$1 -eq 0 ]; then systemctl disable --now sshd; fi
 SPEC_EOF
 }
 
+# === 生成 DEB 元数据 ===
+function generate_deb_meta {
+    # 不打包 PAM 配置，保留系统自带 /etc/pam.d/sshd，避免破坏发行版 PAM 栈
+    cat > ${DEB_STAGE}/DEBIAN/control <<EOF
+Package: openssh
+Version: ${OPENSSH_VERSION}
+Architecture: ${DEB_ARCH}
+Maintainer: openssh-rpms-docker <root@localhost>
+Depends: libc6, zlib1g, libpam0g
+Provides: openssh-server, openssh-client
+Conflicts: openssh-server, openssh-client
+Replaces: openssh-server, openssh-client
+Section: net
+Priority: optional
+Description: OpenSSH ${OPENSSH_VERSION} with statically linked OpenSSL ${OPENSSL_VERSION}
+ Built from upstream source with statically linked OpenSSL; replaces the
+ distribution openssh-server and openssh-client packages.
+EOF
+
+    cat > ${DEB_STAGE}/DEBIAN/conffiles <<EOF
+/etc/ssh/sshd_config
+/etc/ssh/ssh_config
+/etc/ssh/moduli
+EOF
+
+    cat > ${DEB_STAGE}/DEBIAN/postinst <<'POSTINST_EOF'
+#!/bin/sh
+set -e
+if command -v systemctl >/dev/null 2>&1; then
+    systemctl daemon-reload || true
+    systemctl enable sshd >/dev/null 2>&1 || systemctl enable ssh >/dev/null 2>&1 || true
+fi
+exit 0
+POSTINST_EOF
+    chmod 755 ${DEB_STAGE}/DEBIAN/postinst
+}
+
 # ================= 主流程 =================
 OS_TAG="${FORCE_OS_TAG:-$(get_os_tag)}"
 ARCH_TAG=$(get_arch)
+DEB_ROOT="/tmp/openssh_deb_build"
+
+# deb 系（Debian/Ubuntu/deepin 等）打包 .deb，其余打包 RPM
+if command -v apt-get >/dev/null 2>&1; then
+    PKG_TYPE="deb"
+    case "$ARCH_TAG" in
+        x86_64) DEB_ARCH="amd64" ;;
+        aarch64) DEB_ARCH="arm64" ;;
+    esac
+    # 旧版 dpkg 不支持 --root-owner-group
+    DPKG_ROG=""
+    if dpkg-deb --help 2>&1 | grep -q -- --root-owner-group; then
+        DPKG_ROG="--root-owner-group"
+    fi
+else
+    PKG_TYPE="rpm"
+fi
 
 detect_source_files
 
@@ -364,6 +422,11 @@ echo -e "\033[1;37m=============================================================
 
 echo -e " 📦 OpenSSH 源码 : \033[1;32m${SSH_TAR}\033[0m (v${OPENSSH_VERSION})"
 echo -e " 🔒 OpenSSL 源码 : \033[1;32m${SSL_TAR}\033[0m (v${OPENSSL_VERSION})"
+if [ "$PKG_TYPE" = "deb" ]; then
+    echo -e " 📦 包类型       : \033[1;32mDEB\033[0m (Debian/Ubuntu/deepin)"
+else
+    echo -e " 📦 包类型       : \033[1;32mRPM\033[0m"
+fi
 if [ "$HAS_ASKPASS" = true ]; then
     echo -e " 🔑 Askpass 源码 : \033[1;32m${ASKPASS_TAR}\033[0m (v${ASKPASS_VERSION})"
 else
@@ -386,40 +449,96 @@ read -p "   请输入选项 [1-2]: " install_choice
 tput civis
 
 if [ "$install_choice" == "1" ]; then
-    run_task "安装依赖组件" "02_yum_install.log" \
-        "yum install -y rpm-build gcc gcc-c++ make perl perl-IPC-Cmd perl-Data-Dumper perl-Pod-Html zlib-devel pam-devel krb5-devel libXt-devel gtk2-devel perl-devel perl-Time-Piece systemd-devel"
+    if command -v yum >/dev/null 2>&1; then
+        run_task "安装依赖组件" "02_yum_install.log" \
+            "yum install -y rpm-build gcc gcc-c++ make perl perl-IPC-Cmd perl-Data-Dumper perl-Pod-Html zlib-devel pam-devel krb5-devel libXt-devel gtk2-devel perl-devel perl-Time-Piece systemd-devel"
+    elif command -v zypper >/dev/null 2>&1; then
+        run_task "安装依赖组件 (zypper)" "02_yum_install.log" \
+            "zypper -n install rpm-build gcc gcc-c++ make perl zlib-devel pam-devel patch which"
+    else
+        run_task "安装依赖组件 (apt)" "02_yum_install.log" \
+            "export DEBIAN_FRONTEND=noninteractive && apt-get update && apt-get install -y rpm gcc g++ make perl zlib1g-dev libpam0g-dev patch"
+    fi
 else
     echo -e "   -> \033[1;33m跳过依赖安装\033[0m"
 fi
 
-# 2. 初始化
-run_task "初始化 rpmbuild 目录" "03_init_dir.log" \
-    "rm -rf ${RPMBUILD_DIR} && mkdir -p ${RPMBUILD_DIR}/{BUILD,RPMS,SOURCES,SPECS,SRPMS}"
+if [ "$PKG_TYPE" = "deb" ]; then
+    DEB_STAGE="${DEB_ROOT}/stage"
+    DEB_SRC="${DEB_ROOT}/src"
 
-# 3. 复制
-run_task "准备源码文件" "04_copy_src.log" \
-    "cp ${BASE_DIR}/${SSH_TAR} ${RPMBUILD_DIR}/SOURCES/ && \
-     cp ${BASE_DIR}/${SSL_TAR} ${RPMBUILD_DIR}/SOURCES/ && \
-     ([ '${UOS20:-0}' = '1' ] && cp ${BASE_DIR}/openssh-uos20-kernel-panic-fix.patch ${RPMBUILD_DIR}/SOURCES/ || true) && \
-     ([ '$HAS_ASKPASS' = true ] && cp ${BASE_DIR}/${ASKPASS_TAR} ${RPMBUILD_DIR}/SOURCES/ || true)"
+    # 2. 初始化
+    run_task "初始化 DEB 构建目录" "03_init_dir.log" \
+        "rm -rf ${DEB_ROOT} && mkdir -p ${DEB_STAGE}/DEBIAN ${DEB_SRC} ${DEB_ROOT}/out"
 
-# 4. 配置
-run_task "生成 SPEC 配置文件" "05_gen_spec.log" \
-    "generate_build_files"
+    # 3. 解开源码
+    run_task "解压 OpenSSH 源码" "04_copy_src.log" \
+        "tar xf ${BASE_DIR}/${SSH_TAR} -C ${DEB_SRC}"
 
-# 5. 编译
-trap cleanup_turbo INT TERM
-run_task "\033[1;33m[极速模式]\033[0m \033[1;34m编译并打包 RPM\033[0m (按下 \033[1;31mCtrl+C\033[0m 进一步加速)" "06_rpmbuild.log" \
-    "rpmbuild -bb ${RPMBUILD_DIR}/SPECS/openssh.spec"
+    # 4. 编译 OpenSSL 静态库
+    run_task "编译 OpenSSL 静态库" "05_openssl.log" \
+        "mkdir -p ${DEB_ROOT}/openssl_static && tar xf ${BASE_DIR}/${SSL_TAR} --strip-components=1 -C ${DEB_ROOT}/openssl_static && \
+         cd ${DEB_ROOT}/openssl_static && ./config --prefix=/opt/openssl-static --libdir=lib -fPIC no-shared && \
+         make -j\$(nproc) && make install_sw DESTDIR=${DEB_ROOT}/openssl_install"
+
+    # 5. 编译 OpenSSH 并组装 DEB
+    trap cleanup_turbo INT TERM
+    run_task "\033[1;33m[极速模式]\033[0m \033[1;34m编译 OpenSSH 并打包 DEB\033[0m (按下 \033[1;31mCtrl+C\033[0m 进一步加速)" "06_deb_build.log" \
+        "cd ${DEB_SRC}/openssh-${OPENSSH_VERSION} && export LIBS='-lpthread -ldl -lz' && \
+         ./configure --prefix=/usr --sysconfdir=/etc/ssh --libexecdir=/usr/lib/openssh --with-ssl-dir=${DEB_ROOT}/openssl_install/opt/openssl-static --without-openssl-header-check --with-zlib --with-pam --with-md5-passwords --without-zlib-version-check && \
+         perl -pi -e 's|-lcrypto|${DEB_ROOT}/openssl_install/opt/openssl-static/lib/libcrypto.a -lpthread -ldl -lz|g' Makefile && \
+         perl -pi -e 's|-lssl|${DEB_ROOT}/openssl_install/opt/openssl-static/lib/libssl.a|g' Makefile && \
+         make -j\$(nproc) && make install DESTDIR=${DEB_STAGE} && \
+         install -m 755 contrib/ssh-copy-id ${DEB_STAGE}/usr/bin/ && \
+         install -D -m 644 contrib/ssh-copy-id.1 ${DEB_STAGE}/usr/share/man/man1/ssh-copy-id.1 && \
+         generate_deb_meta && \
+         dpkg-deb ${DPKG_ROG} --build ${DEB_STAGE} ${DEB_ROOT}/out/openssh_${OPENSSH_VERSION}_${DEB_ARCH}.deb"
+
+    trap cleanup_standard INT TERM
+else
+    # 2. 初始化
+    run_task "初始化 rpmbuild 目录" "03_init_dir.log" \
+        "rm -rf ${RPMBUILD_DIR} && mkdir -p ${RPMBUILD_DIR}/{BUILD,RPMS,SOURCES,SPECS,SRPMS}"
+
+    # 3. 复制
+    run_task "准备源码文件" "04_copy_src.log" \
+        "cp ${BASE_DIR}/${SSH_TAR} ${RPMBUILD_DIR}/SOURCES/ && \
+         cp ${BASE_DIR}/${SSL_TAR} ${RPMBUILD_DIR}/SOURCES/ && \
+         ([ '${UOS20:-0}' = '1' ] && cp ${BASE_DIR}/openssh-uos20-kernel-panic-fix.patch ${RPMBUILD_DIR}/SOURCES/ || true) && \
+         ([ '$HAS_ASKPASS' = true ] && cp ${BASE_DIR}/${ASKPASS_TAR} ${RPMBUILD_DIR}/SOURCES/ || true)"
+
+    # 4. 配置
+    run_task "生成 SPEC 配置文件" "05_gen_spec.log" \
+        "generate_build_files"
+
+    # 5. 编译
+    trap cleanup_turbo INT TERM
+    # 非 yum 系（openSUSE 等）的包不会完整注册进 rpm 数据库，
+    # BuildRequires 无法解析，需跳过依赖检查（依赖已由镜像预装）
+    RPMBUILD_FLAGS="-bb"
+    if ! command -v yum >/dev/null 2>&1; then
+        RPMBUILD_FLAGS="-bb --nodeps"
+    fi
+    run_task "\033[1;33m[极速模式]\033[0m \033[1;34m编译并打包 RPM\033[0m (按下 \033[1;31mCtrl+C\033[0m 进一步加速)" "06_rpmbuild.log" \
+        "rpmbuild ${RPMBUILD_FLAGS} ${RPMBUILD_DIR}/SPECS/openssh.spec"
+
+    trap cleanup_standard INT TERM
+fi
 
 # 6. 打包
 trap cleanup_standard INT TERM
-PACKAGE_NAME="openssh-${OPENSSH_VERSION}-rpms-${OS_TAG}-${ARCH_TAG}"
+if [ "$PKG_TYPE" = "deb" ]; then
+    PACKAGE_NAME="openssh-${OPENSSH_VERSION}-debs-${OS_TAG}-${ARCH_TAG}"
+    COPY_SRC="${DEB_ROOT}/out/*.deb"
+else
+    PACKAGE_NAME="openssh-${OPENSSH_VERSION}-rpms-${OS_TAG}-${ARCH_TAG}"
+    COPY_SRC="${RPMBUILD_DIR}/RPMS/${ARCH_TAG}/*.rpm"
+fi
 TAR_NAME="${PACKAGE_NAME}.tar.gz"
 
 run_task "整理并压缩安装包" "07_package.log" \
     "mkdir -p ${OUTPUT_DIR}/${PACKAGE_NAME} && \
-     cp ${RPMBUILD_DIR}/RPMS/${ARCH_TAG}/*.rpm ${OUTPUT_DIR}/${PACKAGE_NAME}/ && \
+     cp ${COPY_SRC} ${OUTPUT_DIR}/${PACKAGE_NAME}/ && \
      cp ${BASE_DIR}/install.sh ${OUTPUT_DIR}/${PACKAGE_NAME}/ && \
      chmod 755 ${OUTPUT_DIR}/${PACKAGE_NAME}/install.sh && \
      cd ${OUTPUT_DIR} && \
@@ -428,7 +547,7 @@ run_task "整理并压缩安装包" "07_package.log" \
 
 # 结束
 trap - EXIT INT TERM
-rm -rf "$LOG_DIR" "$RPMBUILD_DIR"
+rm -rf "$LOG_DIR" "$RPMBUILD_DIR" "$DEB_ROOT"
 tput cnorm
 
 echo

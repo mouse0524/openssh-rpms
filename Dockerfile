@@ -27,13 +27,32 @@ RUN if grep -q 'CentOS Linux release 7' /etc/centos-release 2>/dev/null; then \
         -e 's|^#baseurl=http://mirror.stream.centos.org/\$contentdir|baseurl=https://vault.centos.org|' \
         /etc/yum.repos.d/CentOS-*.repo; \
     fi \
- && yum clean all
+ && if command -v apt-get >/dev/null 2>&1; then \
+      apt-get clean; \
+    elif command -v zypper >/dev/null 2>&1; then \
+      zypper -n clean; \
+    elif command -v yum >/dev/null 2>&1; then \
+      yum clean all; \
+    fi
 
 # 预装编译依赖，容器内即可跳过脚本里的交互式依赖安装
-RUN yum install -y rpm-build gcc gcc-c++ make \
-    perl perl-IPC-Cmd perl-Data-Dumper perl-Pod-Html perl-devel perl-Time-Piece \
-    zlib-devel pam-devel tar gzip which patch ncurses \
- && yum clean all
+RUN if command -v apt-get >/dev/null 2>&1; then \
+      export DEBIAN_FRONTEND=noninteractive; \
+      apt-get update; \
+      apt-get install -y --no-install-recommends \
+        rpm gcc g++ make perl zlib1g-dev libpam0g-dev \
+        tar gzip patch xz-utils procps ca-certificates; \
+      rm -rf /var/lib/apt/lists/*; \
+    elif command -v zypper >/dev/null 2>&1; then \
+      zypper -n refresh; \
+      zypper -n install rpm-build gcc gcc-c++ make perl zlib-devel pam-devel tar gzip patch which; \
+      zypper -n clean --all; \
+    else \
+      yum install -y rpm-build gcc gcc-c++ make \
+        perl perl-IPC-Cmd perl-Data-Dumper perl-Pod-Html perl-devel perl-Time-Piece \
+        zlib-devel pam-devel tar gzip which patch ncurses; \
+      yum clean all; \
+    fi
 
 WORKDIR /build
 CMD ["/bin/bash"]
