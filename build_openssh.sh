@@ -17,6 +17,9 @@ LOG_DIR="/tmp/openssh_build_logs"
 
 mkdir -p $LOG_DIR
 
+# 兼容无终端的环境（CI 容器）：未设置 TERM 时给个默认值，避免 tput 报错
+export TERM="${TERM:-dumb}"
+
 # 兼容无 tput 的环境（极简容器/未装 ncurses）：将 tput 降级为空操作
 if ! command -v tput >/dev/null 2>&1; then
     tput() { :; }
@@ -265,7 +268,7 @@ License: BSD
 Group: Applications/Internet
 BuildRoot: %{_tmppath}/%{name}-%{version}-buildroot
 BuildRequires: gcc, make, perl, zlib-devel, pam-devel
-BuildRequires: perl-IPC-Cmd, perl-FindBin
+BuildRequires: perl-IPC-Cmd
 Requires: systemd
 
 %define debug_package %{nil}
