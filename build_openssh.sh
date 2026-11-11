@@ -499,15 +499,43 @@ for tool in gcc make; do
     fi
 done
 
-# 某些环境（自编译 perl 装在 /usr/local）的 perl 缺失 FindBin 等核心模块，
-# 导致 OpenSSL 的 Configure 失败。优先切换到拥有 FindBin 的 perl。
-if ! perl -MFindBin -e 1 >/dev/null 2>&1; then
-    if [ -x /usr/bin/perl ] && /usr/bin/perl -MFindBin -e 1 >/dev/null 2>&1; then
-        export PATH="/usr/bin:$PATH"
-    else
-        error_exit "当前 perl 缺少 FindBin 模块。请为使用中的 perl 安装 FindBin（如 yum install perl-FindBin，或 cpan FindBin）"
+# 确保使用的 perl 拥有 FindBin 模块（OpenSSL 的 Configure 依赖它）。
+# 某些环境（自编译 perl 装在 /usr/local）的 perl 缺失 FindBin，或发行版拆分了
+# 该模块但未装。遍历常见 perl 路径，找不到就安装，并把有 FindBin 的 perl
+# 所在目录提到 PATH 最前，确保 rpmbuild/dpkg 构建时 OpenSSL Configure 能用。
+_perl_with_findbin=""
+for _p in perl /usr/bin/perl /usr/local/bin/perl; do
+    if command -v "$_p" >/dev/null 2>&1 && "$_p" -MFindBin -e 1 >/dev/null 2>&1; then
+        _perl_with_findbin="$_p"
+        break
     fi
+done
+if [ -z "$_perl_with_findbin" ]; then
+    echo -e "\033[1;33m[WARN]\033[0m perl 缺少 FindBin 模块，尝试自动安装..."
+    if command -v dnf >/dev/null 2>&1; then
+        dnf install -y perl-FindBin 2>/dev/null || dnf reinstall -y perl
+    elif command -v yum >/dev/null 2>&1; then
+        yum install -y perl-FindBin 2>/dev/null || yum reinstall -y perl
+    elif command -v zypper >/dev/null 2>&1; then
+        zypper -n install perl-FindBin
+    elif command -v apt-get >/dev/null 2>&1; then
+        apt-get update && apt-get install -y perl-modules
+    fi
+    for _p in /usr/bin/perl perl; do
+        if command -v "$_p" >/dev/null 2>&1 && "$_p" -MFindBin -e 1 >/dev/null 2>&1; then
+            _perl_with_findbin="$_p"
+            break
+        fi
+    done
 fi
+if [ -n "$_perl_with_findbin" ]; then
+    if [ "$_perl_with_findbin" != "perl" ]; then
+        export PATH="$(dirname "$(command -v "$_perl_with_findbin")"):$PATH"
+    fi
+else
+    error_exit "当前 perl 缺少 FindBin 模块。请手动安装（如 yum install perl-FindBin，或 cpan FindBin）"
+fi
+unset _perl_with_findbin _p
 
 if [ "$PKG_TYPE" = "deb" ]; then
     DEB_STAGE="${DEB_ROOT}/stage"
