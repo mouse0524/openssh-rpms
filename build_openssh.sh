@@ -502,48 +502,73 @@ for tool in gcc make; do
 done
 
 # 确保使用的 perl 拥有 OpenSSL Configure 所需的全部核心模块（FindBin、lib.pm 等）。
-# RHEL9/Alma9 等发行版把核心模块拆分得很细：lib.pm 在独立的 perl-lib 包、
-# FindBin 在 perl-FindBin 包，UBI 最小化镜像经常缺，导致 OpenSSL Configure 报
-# "Can't locate lib.pm/FindBin.pm"。逐项探测，缺了就自动补齐。
+# RHEL 系把核心模块拆分得很细且各版本不一致：
+#   el9/el10: lib.pm 在独立的 perl-lib 包
+#   el8:      lib.pm 在 perl 包（模块化 perl 5.26）
+#   el7:      lib.pm 在 perl 本体
+# FindBin 在 el9/el10 拆为 perl-FindBin 包。UBI 最小化镜像经常缺，导致
+# OpenSSL Configure 报 "Can't locate lib.pm/FindBin.pm"。
+# 策略：逐项探测，缺了就按候选包组合逐级安装，每轮装完立即重新探测。
 _perl_mod_check="-MFindBin -Mlib -Mstrict -Mwarnings -MPOSIX -MGetopt::Long -MFile::Basename -MCwd -MFile::Copy"
+_perl_good() {
+    command -v "$1" >/dev/null 2>&1 || return 1
+    "$1" ${_perl_mod_check} -e 1 >/dev/null 2>&1
+}
 _perl_ok=""
 for _p in perl /usr/bin/perl /usr/local/bin/perl; do
-    if command -v "$_p" >/dev/null 2>&1 && "$_p" ${_perl_mod_check} -e 1 >/dev/null 2>&1; then
-        _perl_ok="$_p"
-        break
-    fi
+    if _perl_good "$_p"; then _perl_ok="$_p"; break; fi
 done
 if [ -z "$_perl_ok" ]; then
     echo -e "\033[1;33m[WARN]\033[0m perl 缺少核心模块（lib.pm/FindBin 等），尝试自动安装..."
-    # el9 的 lib.pm 在 perl-lib 包；el7/Fedora 无 perl-lib，用 perl-core 兜底
-    if command -v dnf >/dev/null 2>&1; then
-        dnf install -y perl-lib perl-core 2>/dev/null || dnf install -y perl-core 2>/dev/null || dnf reinstall -y perl
-    elif command -v yum >/dev/null 2>&1; then
-        yum install -y perl-lib perl-core 2>/dev/null || yum install -y perl-core 2>/dev/null || yum reinstall -y perl
-    elif command -v zypper >/dev/null 2>&1; then
-        zypper -n install perl-core 2>/dev/null || zypper -n install perl
-    elif command -v apt-get >/dev/null 2>&1; then
-        apt-get update && apt-get install -y perl-modules
+    _pkg_mgr=""
+    if command -v dnf >/dev/null 2>&1; then _pkg_mgr="dnf"
+    elif command -v yum >/dev/null 2>&1; then _pkg_mgr="yum"
+    elif command -v zypper >/dev/null 2>&1; then _pkg_mgr="zypper"
+    elif command -v apt-get >/dev/null 2>&1; then _pkg_mgr="apt-get"
+    fi
+    _try_install() {
+        case "$_pkg_mgr" in
+            dnf|yum)  "$_pkg_mgr" install -y "$@" 2>/dev/null ;;
+            zypper)   zypper -n install "$@" 2>/dev/null ;;
+            apt-get)  DEBIAN_FRONTEND=noninteractive apt-get install -y "$@" 2>/dev/null ;;
+            *)        return 1 ;;
+        esac
+    }
+    if [ -n "$_pkg_mgr" ]; then
+        [ "$_pkg_mgr" = "apt-get" ] && apt-get update
+        # 逐级尝试：perl-lib(el9/10) → perl-core(各版本核心全集) → perl 本体(el8)
+        for _pkgs in "perl-lib perl-core" "perl-FindBin perl-core" "perl"; do
+            _try_install $_pkgs || true
+            for _p in /usr/bin/perl perl /usr/local/bin/perl; do
+                if _perl_good "$_p"; then _perl_ok="$_p"; break; fi
+            done
+            [ -n "$_perl_ok" ] && break
+        done
+        # 仍不行就重装 perl 本体（覆盖被残缺自编译版破坏的场景）
+        if [ -z "$_perl_ok" ] && { [ "$_pkg_mgr" = "dnf" ] || [ "$_pkg_mgr" = "yum" ]; }; then
+            $_pkg_mgr reinstall -y perl >/dev/null 2>&1 || true
+            for _p in /usr/bin/perl perl; do
+                if _perl_good "$_p"; then _perl_ok="$_p"; break; fi
+            done
+        fi
     fi
     # 包管理器装不上时用 cpan 兜底
-    if command -v cpan >/dev/null 2>&1; then
+    if [ -z "$_perl_ok" ] && command -v cpan >/dev/null 2>&1; then
         cpan -T FindBin >/dev/null 2>&1 || true
+        for _p in /usr/bin/perl perl; do
+            if _perl_good "$_p"; then _perl_ok="$_p"; break; fi
+        done
     fi
-    for _p in /usr/bin/perl perl; do
-        if command -v "$_p" >/dev/null 2>&1 && "$_p" -MFindBin -Mlib -e 1 >/dev/null 2>&1; then
-            _perl_ok="$_p"
-            break
-        fi
-    done
 fi
 if [ -n "$_perl_ok" ]; then
     if [ "$_perl_ok" != "perl" ]; then
         export PATH="$(dirname "$(command -v "$_perl_ok")"):$PATH"
     fi
 else
-    error_exit "当前 perl 缺少核心模块（lib.pm/FindBin 等）。请手动安装：RHEL9/Alma9 用 yum install perl-lib，其他用 yum install perl-core"
+    error_exit "当前 perl 缺少核心模块（lib.pm/FindBin 等）。请手动安装：RHEL9/10 用 yum install perl-lib，RHEL8 用 yum install perl perl-core"
 fi
-unset _perl_mod_check _perl_ok _p
+unset -f _perl_good _try_install
+unset _perl_mod_check _perl_ok _pkg_mgr _pkgs _p
 
 if [ "$PKG_TYPE" = "deb" ]; then
     DEB_STAGE="${DEB_ROOT}/stage"
