@@ -523,6 +523,12 @@ if [ "$PKG_TYPE" = "rpm" ]; then
             done
             sed -i 's/^enabled=0/enabled=1/' /etc/yum.repos.d/ubi.repo 2>/dev/null || true
             dnf install -y $_hdr_pkgs 2>/dev/null || dnf install -y --allowerasing $_hdr_pkgs || true
+            # UBI 系镜像官方仓库（含 CodeReady Builder）均不含 pam-devel，
+            # 从 AlmaLinux AppStream 兼容源单独补装
+            if [ ! -f /usr/include/security/pam_appl.h ]; then
+                _alm_maj=$(rpm -E '%{rhel}' 2>/dev/null)
+                dnf -y install pam-devel --repofrompath almapam,"https://repo.almalinux.org/almalinux/${_alm_maj}/AppStream/\$basearch/os" --nogpgcheck 2>/dev/null || true
+            fi
         elif command -v yum >/dev/null 2>&1; then
             yum install -y $_hdr_pkgs || true
         elif command -v zypper >/dev/null 2>&1; then
@@ -530,7 +536,7 @@ if [ "$PKG_TYPE" = "rpm" ]; then
         fi
     fi
     [ -f /usr/include/zlib.h ] || error_exit "缺少 /usr/include/zlib.h，请安装 zlib-devel（UBI 需启用 CodeReady Builder 仓库）"
-    [ -f /usr/include/security/pam_appl.h ] || error_exit "缺少 /usr/include/security/pam_appl.h，请安装 pam-devel"
+    [ -f /usr/include/security/pam_appl.h ] || error_exit "缺少 /usr/include/security/pam_appl.h，请安装 pam-devel（UBI 官方仓库不含此包，需从 AlmaLinux AppStream 兼容源安装）"
     unset _hdr_pkgs
 fi
 

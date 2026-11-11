@@ -52,6 +52,10 @@ RUN if command -v apt-get >/dev/null 2>&1; then \
         dnf config-manager --set-enabled "$_r" 2>/dev/null || true; \
       done; \
       sed -i 's/^enabled=0/enabled=1/' /etc/yum.repos.d/ubi.repo 2>/dev/null || true; \
+      if ! dnf -q list pam-devel >/dev/null 2>&1; then \
+        _rhel_maj=$(rpm -E '%{rhel}' 2>/dev/null); \
+        dnf -y install pam-devel --repofrompath almapam,https://repo.almalinux.org/almalinux/${_rhel_maj}/AppStream/\$basearch/os --nogpgcheck 2>/dev/null || true; \
+      fi; \
       dnf install -y rpm-build gcc gcc-c++ make zlib-devel pam-devel tar gzip which patch ncurses \
       || dnf install -y --allowerasing rpm-build gcc gcc-c++ make zlib-devel pam-devel tar gzip which patch ncurses \
       || true; \
