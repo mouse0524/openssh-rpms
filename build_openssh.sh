@@ -478,7 +478,8 @@ if [ "$PKG_TYPE" = "rpm" ]; then
     if ! command -v rpmbuild >/dev/null 2>&1; then
         echo -e "\033[1;33m[WARN]\033[0m 未找到 rpmbuild，尝试自动安装..."
         if command -v dnf >/dev/null 2>&1; then
-            dnf install -y rpm-build gcc gcc-c++ make
+            # RHEL10 UBI 等场景：容器内 rpm 版本落后于仓库时会出现依赖冲突，需 --allowerasing 替换
+            dnf install -y rpm-build gcc gcc-c++ make 2>/dev/null || dnf install -y --allowerasing rpm-build gcc gcc-c++ make
         elif command -v yum >/dev/null 2>&1; then
             yum install -y rpm-build gcc gcc-c++ make
         elif command -v zypper >/dev/null 2>&1; then
@@ -528,7 +529,8 @@ if [ -z "$_perl_ok" ]; then
     fi
     _try_install() {
         case "$_pkg_mgr" in
-            dnf|yum)  "$_pkg_mgr" install -y "$@" 2>/dev/null ;;
+            dnf)      dnf install -y "$@" 2>/dev/null || dnf install -y --allowerasing "$@" 2>/dev/null ;;
+            yum)      yum install -y "$@" 2>/dev/null ;;
             zypper)   zypper -n install "$@" 2>/dev/null ;;
             apt-get)  DEBIAN_FRONTEND=noninteractive apt-get install -y "$@" 2>/dev/null ;;
             *)        return 1 ;;

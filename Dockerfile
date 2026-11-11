@@ -50,6 +50,9 @@ RUN if command -v apt-get >/dev/null 2>&1; then \
     elif command -v dnf >/dev/null 2>&1; then \
       dnf install -y rpm-build gcc gcc-c++ make \
         perl perl-core perl-IPC-Cmd perl-Data-Dumper perl-Pod-Html perl-devel perl-Time-Piece \
+        zlib-devel pam-devel tar gzip which patch ncurses \
+      || dnf install -y --allowerasing rpm-build gcc gcc-c++ make \
+        perl perl-core perl-IPC-Cmd perl-Data-Dumper perl-Pod-Html perl-devel perl-Time-Piece \
         zlib-devel pam-devel tar gzip which patch ncurses; \
       dnf install -y perl-lib 2>/dev/null || true; \
       dnf clean all; \
