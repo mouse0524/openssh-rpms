@@ -314,10 +314,9 @@ make -j\$(nproc)
 rm -rf %{buildroot}
 make install DESTDIR=%{buildroot}
 install -m 755 contrib/ssh-copy-id %{buildroot}/usr/bin/
-install -m 644 contrib/ssh-copy-id.1 %{buildroot}/usr/share/man/man1/
+install -D -m 644 contrib/ssh-copy-id.1 %{buildroot}/usr/share/man/man1/ssh-copy-id.1
 install -D -m 644 %{SOURCE2} %{buildroot}/etc/pam.d/sshd
-mkdir -p %{buildroot}/usr/lib/systemd/system/
-install -m 644 %{SOURCE4} %{buildroot}/usr/lib/systemd/system/sshd.service
+install -D -m 644 %{SOURCE4} %{buildroot}/usr/lib/systemd/system/sshd.service
 rm -f %{buildroot}/usr/share/info/dir
 
 %clean
@@ -556,7 +555,7 @@ if [ "$PKG_TYPE" = "deb" ]; then
     # 4. 编译 OpenSSL 静态库
     run_task "编译 OpenSSL 静态库" "05_openssl.log" \
         "mkdir -p ${DEB_ROOT}/openssl_static && tar xf ${BASE_DIR}/${SSL_TAR} --strip-components=1 -C ${DEB_ROOT}/openssl_static && \
-         cd ${DEB_ROOT}/openssl_static && ./config --prefix=/opt/openssl-static --libdir=lib -fPIC no-shared && \
+         cd ${DEB_ROOT}/openssl_static && export PATH=/usr/bin:/bin:\$PATH && ./config --prefix=/opt/openssl-static --libdir=lib -fPIC no-shared && \
          make -j\$(nproc) && make install_sw DESTDIR=${DEB_ROOT}/openssl_install"
 
     # 5. 编译 OpenSSH 并组装 DEB
@@ -594,8 +593,10 @@ else
     # 构建依赖由 Dockerfile 预装，UBI/openSUSE 等镜像的 rpm 数据库可能无法完整解析
     # BuildRequires，统一用 --nodeps 跳过依赖检查。
     RPMBUILD_FLAGS="-bb --nodeps"
+    # 显式注入 PATH，确保 rpmbuild 内部使用带完整核心模块的系统 perl，
+    # 避免镜像里 /usr/local 的残缺 perl（缺 lib.pm/FindBin 等）被 OpenSSL Configure 调用。
     run_task "\033[1;33m[极速模式]\033[0m \033[1;34m编译并打包 RPM\033[0m (按下 \033[1;31mCtrl+C\033[0m 进一步加速)" "06_rpmbuild.log" \
-        "rpmbuild ${RPMBUILD_FLAGS} --define \"_topdir ${RPMBUILD_DIR}\" ${RPMBUILD_DIR}/SPECS/openssh.spec"
+        "export PATH=/usr/bin:/bin:\$PATH && rpmbuild ${RPMBUILD_FLAGS} --define \"_topdir ${RPMBUILD_DIR}\" ${RPMBUILD_DIR}/SPECS/openssh.spec"
 
     trap cleanup_standard INT TERM
 fi
