@@ -27,8 +27,9 @@ RUN if grep -q 'CentOS Linux release 7' /etc/centos-release 2>/dev/null; then \
         -e 's|^#baseurl=http://mirror.stream.centos.org/\$contentdir|baseurl=https://vault.centos.org|' \
         /etc/yum.repos.d/CentOS-*.repo; \
     elif [ -f /etc/almalinux-release ]; then \
-      sed -i -e 's|^mirrorlist=|#mirrorlist=|' \
-        -e 's|^# baseurl=https://repo.almalinux.org/almalinux|baseurl=https://repo.almalinux.org/almalinux|' \
+      sed -i \
+        -e '/^\[baseos\]/,/^\[/{s|^mirrorlist=|#mirrorlist=|;s|^# baseurl=https://repo.almalinux.org/almalinux|baseurl=https://repo.almalinux.org/almalinux|}' \
+        -e '/^\[appstream\]/,/^\[/{s|^mirrorlist=|#mirrorlist=|;s|^# baseurl=https://repo.almalinux.org/almalinux|baseurl=https://repo.almalinux.org/almalinux|}' \
         /etc/yum.repos.d/almalinux*.repo 2>/dev/null || true; \
     fi \
  && if command -v apt-get >/dev/null 2>&1; then \
