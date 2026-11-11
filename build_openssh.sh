@@ -524,10 +524,13 @@ if [ "$PKG_TYPE" = "rpm" ]; then
             sed -i 's/^enabled=0/enabled=1/' /etc/yum.repos.d/ubi.repo 2>/dev/null || true
             dnf install -y $_hdr_pkgs 2>/dev/null || dnf install -y --allowerasing $_hdr_pkgs || true
             # UBI 系镜像官方仓库（含 CodeReady Builder）均不含 pam-devel，
-            # 从 AlmaLinux AppStream 兼容源单独补装
+            # 从 AlmaLinux 兼容源单独补装（el8 的 pam-devel 在 BaseOS，el9/10 在 AppStream）
             if [ ! -f /usr/include/security/pam_appl.h ]; then
                 _alm_maj=$(rpm -E '%{rhel}' 2>/dev/null)
-                dnf -y install pam-devel --repofrompath almapam,"https://repo.almalinux.org/almalinux/${_alm_maj}/AppStream/\$basearch/os" --nogpgcheck 2>/dev/null || true
+                dnf -y install pam-devel \
+                    --repofrompath almapam-bs,"https://repo.almalinux.org/almalinux/${_alm_maj}/BaseOS/\$basearch/os" \
+                    --repofrompath almapam-as,"https://repo.almalinux.org/almalinux/${_alm_maj}/AppStream/\$basearch/os" \
+                    --nogpgcheck 2>/dev/null || true
             fi
         elif command -v yum >/dev/null 2>&1; then
             yum install -y $_hdr_pkgs || true

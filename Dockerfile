@@ -26,6 +26,10 @@ RUN if grep -q 'CentOS Linux release 7' /etc/centos-release 2>/dev/null; then \
         -e 's|^#baseurl=http://mirror.centos.org/\$contentdir|baseurl=https://vault.centos.org|' \
         -e 's|^#baseurl=http://mirror.stream.centos.org/\$contentdir|baseurl=https://vault.centos.org|' \
         /etc/yum.repos.d/CentOS-*.repo; \
+    elif [ -f /etc/almalinux-release ]; then \
+      sed -i -e 's|^mirrorlist=|#mirrorlist=|' \
+        -e 's|^# baseurl=https://repo.almalinux.org/almalinux|baseurl=https://repo.almalinux.org/almalinux|' \
+        /etc/yum.repos.d/almalinux.repo; \
     fi \
  && if command -v apt-get >/dev/null 2>&1; then \
       apt-get clean; \
@@ -54,7 +58,10 @@ RUN if command -v apt-get >/dev/null 2>&1; then \
       sed -i 's/^enabled=0/enabled=1/' /etc/yum.repos.d/ubi.repo 2>/dev/null || true; \
       if ! dnf -q list pam-devel >/dev/null 2>&1; then \
         _rhel_maj=$(rpm -E '%{rhel}' 2>/dev/null); \
-        dnf -y install pam-devel --repofrompath almapam,https://repo.almalinux.org/almalinux/${_rhel_maj}/AppStream/\$basearch/os --nogpgcheck 2>/dev/null || true; \
+        dnf -y install pam-devel \
+          --repofrompath almapam-bs,https://repo.almalinux.org/almalinux/${_rhel_maj}/BaseOS/\$basearch/os \
+          --repofrompath almapam-as,https://repo.almalinux.org/almalinux/${_rhel_maj}/AppStream/\$basearch/os \
+          --nogpgcheck 2>/dev/null || true; \
       fi; \
       dnf install -y rpm-build gcc gcc-c++ make zlib-devel pam-devel tar gzip which patch ncurses \
       || dnf install -y --allowerasing rpm-build gcc gcc-c++ make zlib-devel pam-devel tar gzip which patch ncurses \
