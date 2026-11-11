@@ -49,13 +49,15 @@ RUN if command -v apt-get >/dev/null 2>&1; then \
       zypper -n clean --all; \
     elif command -v dnf >/dev/null 2>&1; then \
       dnf install -y rpm-build gcc gcc-c++ make \
-        perl perl-IPC-Cmd perl-Data-Dumper perl-Pod-Html perl-devel perl-Time-Piece \
+        perl perl-core perl-IPC-Cmd perl-Data-Dumper perl-Pod-Html perl-devel perl-Time-Piece \
         zlib-devel pam-devel tar gzip which patch ncurses; \
+      dnf install -y perl-lib 2>/dev/null || true; \
       dnf clean all; \
     else \
       yum install -y rpm-build gcc gcc-c++ make \
-        perl perl-IPC-Cmd perl-Data-Dumper perl-Pod-Html perl-devel perl-Time-Piece \
+        perl perl-core perl-IPC-Cmd perl-Data-Dumper perl-Pod-Html perl-devel perl-Time-Piece \
         zlib-devel pam-devel tar gzip which patch ncurses; \
+      yum install -y perl-lib 2>/dev/null || true; \
       yum clean all; \
     fi
 

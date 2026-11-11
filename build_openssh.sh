@@ -461,7 +461,7 @@ tput civis
 if [ "$install_choice" == "1" ]; then
     if command -v yum >/dev/null 2>&1; then
         run_task "安装依赖组件" "02_yum_install.log" \
-            "yum install -y rpm-build gcc gcc-c++ make perl perl-FindBin perl-IPC-Cmd perl-Data-Dumper perl-Pod-Html zlib-devel pam-devel krb5-devel libXt-devel gtk2-devel perl-devel perl-Time-Piece systemd-devel"
+            "yum install -y rpm-build gcc gcc-c++ make perl perl-core perl-IPC-Cmd perl-Data-Dumper perl-Pod-Html zlib-devel pam-devel krb5-devel libXt-devel gtk2-devel perl-devel perl-Time-Piece systemd-devel"
     elif command -v zypper >/dev/null 2>&1; then
         run_task "安装依赖组件 (zypper)" "02_yum_install.log" \
             "zypper -n install rpm-build gcc gcc-c++ make perl perl-FindBin zlib-devel pam-devel patch which"
@@ -501,47 +501,49 @@ for tool in gcc make; do
     fi
 done
 
-# 确保使用的 perl 拥有 FindBin 模块（OpenSSL 的 Configure 依赖它）。
-# 某些环境（自编译 perl 装在 /usr/local）的 perl 缺失 FindBin，或发行版拆分了
-# 该模块但未装。遍历常见 perl 路径，找不到就安装，并把有 FindBin 的 perl
-# 所在目录提到 PATH 最前，确保 rpmbuild/dpkg 构建时 OpenSSL Configure 能用。
-_perl_with_findbin=""
+# 确保使用的 perl 拥有 OpenSSL Configure 所需的全部核心模块（FindBin、lib.pm 等）。
+# RHEL9/Alma9 等发行版把核心模块拆分得很细：lib.pm 在独立的 perl-lib 包、
+# FindBin 在 perl-FindBin 包，UBI 最小化镜像经常缺，导致 OpenSSL Configure 报
+# "Can't locate lib.pm/FindBin.pm"。逐项探测，缺了就自动补齐。
+_perl_mod_check="-MFindBin -Mlib -Mstrict -Mwarnings -MPOSIX -MGetopt::Long -MFile::Basename -MCwd -MFile::Copy"
+_perl_ok=""
 for _p in perl /usr/bin/perl /usr/local/bin/perl; do
-    if command -v "$_p" >/dev/null 2>&1 && "$_p" -MFindBin -e 1 >/dev/null 2>&1; then
-        _perl_with_findbin="$_p"
+    if command -v "$_p" >/dev/null 2>&1 && "$_p" ${_perl_mod_check} -e 1 >/dev/null 2>&1; then
+        _perl_ok="$_p"
         break
     fi
 done
-if [ -z "$_perl_with_findbin" ]; then
-    echo -e "\033[1;33m[WARN]\033[0m perl 缺少 FindBin 模块，尝试自动安装..."
+if [ -z "$_perl_ok" ]; then
+    echo -e "\033[1;33m[WARN]\033[0m perl 缺少核心模块（lib.pm/FindBin 等），尝试自动安装..."
+    # el9 的 lib.pm 在 perl-lib 包；el7/Fedora 无 perl-lib，用 perl-core 兜底
     if command -v dnf >/dev/null 2>&1; then
-        dnf install -y perl-FindBin 2>/dev/null || dnf install -y perl-core 2>/dev/null || dnf reinstall -y perl
+        dnf install -y perl-lib perl-core 2>/dev/null || dnf install -y perl-core 2>/dev/null || dnf reinstall -y perl
     elif command -v yum >/dev/null 2>&1; then
-        yum install -y perl-FindBin 2>/dev/null || yum install -y perl-core 2>/dev/null || yum reinstall -y perl
+        yum install -y perl-lib perl-core 2>/dev/null || yum install -y perl-core 2>/dev/null || yum reinstall -y perl
     elif command -v zypper >/dev/null 2>&1; then
-        zypper -n install perl-FindBin 2>/dev/null || zypper -n install perl-base 2>/dev/null || zypper -n install perl
+        zypper -n install perl-core 2>/dev/null || zypper -n install perl
     elif command -v apt-get >/dev/null 2>&1; then
         apt-get update && apt-get install -y perl-modules
     fi
-    # 包管理器装不上时用 cpan 兜底（FindBin 是核心模块，cpan 通常能拉到）
+    # 包管理器装不上时用 cpan 兜底
     if command -v cpan >/dev/null 2>&1; then
         cpan -T FindBin >/dev/null 2>&1 || true
     fi
     for _p in /usr/bin/perl perl; do
-        if command -v "$_p" >/dev/null 2>&1 && "$_p" -MFindBin -e 1 >/dev/null 2>&1; then
-            _perl_with_findbin="$_p"
+        if command -v "$_p" >/dev/null 2>&1 && "$_p" -MFindBin -Mlib -e 1 >/dev/null 2>&1; then
+            _perl_ok="$_p"
             break
         fi
     done
 fi
-if [ -n "$_perl_with_findbin" ]; then
-    if [ "$_perl_with_findbin" != "perl" ]; then
-        export PATH="$(dirname "$(command -v "$_perl_with_findbin")"):$PATH"
+if [ -n "$_perl_ok" ]; then
+    if [ "$_perl_ok" != "perl" ]; then
+        export PATH="$(dirname "$(command -v "$_perl_ok")"):$PATH"
     fi
 else
-    error_exit "当前 perl 缺少 FindBin 模块。请手动安装（如 yum install perl-FindBin，或 cpan FindBin）"
+    error_exit "当前 perl 缺少核心模块（lib.pm/FindBin 等）。请手动安装：RHEL9/Alma9 用 yum install perl-lib，其他用 yum install perl-core"
 fi
-unset _perl_with_findbin _p
+unset _perl_mod_check _perl_ok _p
 
 if [ "$PKG_TYPE" = "deb" ]; then
     DEB_STAGE="${DEB_ROOT}/stage"
