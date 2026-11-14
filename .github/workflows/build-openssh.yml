@@ -679,7 +679,7 @@ jobs:
             if command -v dnf >/dev/null; then dnf install -y systemd;
             elif command -v yum >/dev/null; then yum install -y systemd;
             elif command -v zypper >/dev/null; then zypper -n install systemd;
-            elif command -v apt-get >/dev/null; then apt-get update && apt-get install -y systemd;
+            elif command -v apt-get >/dev/null; then apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y systemd systemd-sysv;
             fi; fi'
           docker commit prep prep-image:latest
           docker rm -f prep
