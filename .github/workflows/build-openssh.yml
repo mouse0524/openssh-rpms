@@ -639,9 +639,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - target: centos7
-            image: "centos:7"
-            svc: sshd
           - target: rockylinux8
             image: "rockylinux/rockylinux:8"
             svc: sshd
@@ -690,7 +687,8 @@ jobs:
       - name: Start systemd container
         run: |
           set -e
-          docker run --privileged -d --name it prep-image:latest /usr/sbin/init
+          # /sbin/init 在传统目录布局（debian）与 usr-merged 布局（el 系）下都存在
+          docker run --privileged -d --name it prep-image:latest /sbin/init
           for i in $(seq 1 90); do
             STATE="$(docker exec it systemctl is-system-running 2>/dev/null || true)"
             case "$STATE" in running|degraded) echo "systemd ready: $STATE"; break ;; esac

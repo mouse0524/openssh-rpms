@@ -329,6 +329,13 @@ rm -f %{buildroot}/usr/share/info/dir
 %clean
 rm -rf %{buildroot}
 
+%pre server
+getent group sshd >/dev/null 2>&1 || groupadd -r sshd 2>/dev/null || true
+getent passwd sshd >/dev/null 2>&1 || useradd -r -g sshd -d /var/empty -s /sbin/nologin sshd 2>/dev/null || true
+mkdir -p /var/empty
+chown root:root /var/empty
+chmod 755 /var/empty
+
 %post server
 systemctl daemon-reload
 if ls /etc/ssh/ssh_host_*_key >/dev/null 2>&1; then chmod 600 /etc/ssh/ssh_host_*_key; fi
@@ -418,6 +425,12 @@ DEB_UNIT_EOF
     cat > ${DEB_STAGE}/DEBIAN/postinst <<'POSTINST_EOF'
 #!/bin/sh
 set -e
+# 确保 privilege separation 用户存在（全新系统/容器镜像中缺失）
+getent group sshd >/dev/null 2>&1 || groupadd -r sshd 2>/dev/null || true
+getent passwd sshd >/dev/null 2>&1 || useradd -r -g sshd -d /var/empty -s /usr/sbin/nologin sshd 2>/dev/null || true
+mkdir -p /var/empty
+chown root:root /var/empty
+chmod 755 /var/empty
 if command -v systemctl >/dev/null 2>&1; then
     systemctl daemon-reload || true
     systemctl enable sshd >/dev/null 2>&1 || systemctl enable ssh >/dev/null 2>&1 || true
