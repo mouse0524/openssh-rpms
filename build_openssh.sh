@@ -499,6 +499,10 @@ else
 fi
 
 # 依赖预检：跳过安装时给出明确提示，避免跑到一半才发现缺工具
+# 部分镜像（anolis8 等）在 overlayfs 构建期 rpm 数据库可能损坏（rpmrebuilddb 失败），
+# 导致后续 dnf 事务"成功"但不落盘。启动时先重建一次。
+command -v rpm >/dev/null 2>&1 && rpm --rebuilddb >/dev/null 2>&1 || true
+
 if [ "$PKG_TYPE" = "rpm" ]; then
     if ! command -v rpmbuild >/dev/null 2>&1; then
         echo -e "\033[1;33m[WARN]\033[0m 未找到 rpmbuild，尝试自动安装..."
@@ -607,6 +611,14 @@ if [ -z "$_perl_ok" ]; then
                 if _perl_good "$_p"; then _perl_ok="$_p"; break; fi
             done
             [ -n "$_perl_ok" ] && break
+            # rpm 数据库损坏时事务虽成功但不落盘，重建后再探一次
+            if command -v rpm >/dev/null 2>&1; then
+                rpm --rebuilddb >/dev/null 2>&1 || true
+                for _p in /usr/bin/perl perl /usr/local/bin/perl; do
+                    if _perl_good "$_p"; then _perl_ok="$_p"; break; fi
+                done
+                [ -n "$_perl_ok" ] && break
+            fi
         done
         # 仍不行就重装 perl 本体（覆盖被残缺自编译版破坏的场景）
         if [ -z "$_perl_ok" ] && { [ "$_pkg_mgr" = "dnf" ] || [ "$_pkg_mgr" = "yum" ]; }; then
