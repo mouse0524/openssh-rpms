@@ -628,6 +628,75 @@ jobs:
           path: dist/*.tar.gz
           if-no-files-found: error
 
+  install-test:
+    name: install-test ${{ matrix.target }}
+    needs: [resolve, build]
+    if: needs.resolve.outputs.should_build == 'true' && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: centos7
+            image: "centos:7"
+            svc: sshd
+          - target: rockylinux8
+            image: "rockylinux/rockylinux:8"
+            svc: sshd
+          - target: rockylinux9
+            image: "rockylinux/rockylinux:9"
+            svc: sshd
+          - target: rockylinux10
+            image: "rockylinux/rockylinux:10"
+            svc: sshd
+          - target: openeuler-24.03-sp3
+            image: "openeuler/openeuler:24.03-lts-sp3"
+            svc: sshd
+          - target: kylin-v10-sp3
+            image: "hxsoong/kylin@sha256:b49a72ecf3213e00c5316935a51594c11d43fbccb13ad0cecf939f0f1c1101a3"
+            svc: sshd
+          - target: debian-12
+            image: "debian:12"
+            svc: ssh
+    steps:
+      - name: Download package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rpms-${{ matrix.target }}-x86_64
+          path: pkg
+
+      - name: Extract package
+        run: |
+          set -e
+          tar -xzf pkg/*.tar.gz -C pkg --strip-components=1
+          ls -lh pkg/
+
+      - name: Start systemd container
+        run: |
+          set -e
+          docker run --privileged -d --name it "${{ matrix.image }}" /usr/sbin/init
+          for i in $(seq 1 60); do
+            STATE="$(docker exec it systemctl is-system-running 2>/dev/null || true)"
+            case "$STATE" in running|degraded) echo "systemd ready: $STATE"; break ;; esac
+            sleep 2
+          done
+          docker exec it systemctl is-system-running 2>/dev/null || true
+
+      - name: Install packages (install.sh)
+        run: |
+          set -e
+          docker cp pkg/. it:/pkg
+          docker exec -w /pkg it bash ./install.sh
+
+      - name: Verify installation
+        run: |
+          set -e
+          docker exec it ssh -V
+          docker exec it sh -c "systemctl is-active ${{ matrix.svc }} || systemctl is-active sshd"
+          echo "install-test OK: ${{ matrix.target }}"
+
   release:
     name: Publish Release
     needs: [resolve, build]

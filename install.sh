@@ -131,6 +131,11 @@ for key in /etc/ssh/ssh_host_*_key; do
     [ -f "$key" ] && chmod 600 "$key"
 done
 
+# 全新/极简系统可能没有任何 host key（sshd -t 与服务启动都会失败）
+if ! ls /etc/ssh/ssh_host_*_key >/dev/null 2>&1; then
+    command -v ssh-keygen >/dev/null 2>&1 && ssh-keygen -A
+fi
+
 SSHD_BIN=$(command -v sshd 2>/dev/null || true)
 [ -n "$SSHD_BIN" ] || SSHD_BIN=/usr/sbin/sshd
 [ -x "$SSHD_BIN" ] || die "未找到 sshd"

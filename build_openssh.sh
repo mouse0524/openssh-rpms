@@ -394,6 +394,27 @@ EOF
 /etc/ssh/moduli
 EOF
 
+    # 打包 systemd 单元（deb 会替换发行版 openssh-server，连带移除其 ssh.service）
+    mkdir -p ${DEB_STAGE}/usr/lib/systemd/system
+    cat > ${DEB_STAGE}/usr/lib/systemd/system/sshd.service <<'DEB_UNIT_EOF'
+[Unit]
+Description=OpenSSH server daemon
+Documentation=man:sshd(8) man:sshd_config(5)
+After=network.target
+
+[Service]
+Type=simple
+ExecStartPre=/usr/bin/ssh-keygen -A
+ExecStart=/usr/sbin/sshd -D
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=process
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+DEB_UNIT_EOF
+
     cat > ${DEB_STAGE}/DEBIAN/postinst <<'POSTINST_EOF'
 #!/bin/sh
 set -e
