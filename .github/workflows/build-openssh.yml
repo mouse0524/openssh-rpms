@@ -673,11 +673,25 @@ jobs:
           tar -xzf pkg/*.tar.gz -C pkg --strip-components=1
           ls -lh pkg/
 
+      - name: Prepare systemd-enabled image
+        run: |
+          set -e
+          # rockylinux 等官方基础镜像不含 systemd，先起临时容器按需安装再 commit
+          docker run -d --name prep "${{ matrix.image }}" sleep infinity
+          docker exec prep sh -c 'if [ ! -e /usr/sbin/init ] && [ ! -e /sbin/init ]; then
+            if command -v dnf >/dev/null; then dnf install -y systemd;
+            elif command -v yum >/dev/null; then yum install -y systemd;
+            elif command -v zypper >/dev/null; then zypper -n install systemd;
+            elif command -v apt-get >/dev/null; then apt-get update && apt-get install -y systemd;
+            fi; fi'
+          docker commit prep prep-image:latest
+          docker rm -f prep
+
       - name: Start systemd container
         run: |
           set -e
-          docker run --privileged -d --name it "${{ matrix.image }}" /usr/sbin/init
-          for i in $(seq 1 60); do
+          docker run --privileged -d --name it prep-image:latest /usr/sbin/init
+          for i in $(seq 1 90); do
             STATE="$(docker exec it systemctl is-system-running 2>/dev/null || true)"
             case "$STATE" in running|degraded) echo "systemd ready: $STATE"; break ;; esac
             sleep 2
